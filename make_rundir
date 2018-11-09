@@ -1,0 +1,509 @@
+#!/bin/bash
+
+#EOC
+#------------------------------------------------------------------------------
+#              Harvard Biogeochemistry of Global Pollutants Group             !
+#------------------------------------------------------------------------------
+#BOP
+#
+# !IROUTINE: make_rundir
+#
+# !DESCRIPTION: Creates a template run directory (in a subdirectory of the
+#  verification folder) for the MITgcm.
+#\\
+#\\
+# !CALLING SEQUENCE:
+#  ./make_rundir hg    # For Hg   simulation
+#  ./make_rundir pfos  # For PFOS simulation
+#  ./make_rundir pcb   # For PCB  simulation
+#
+# !REMARKS:
+#  Based on the instructions on the Harvard BCG wiki page:
+#  https://wiki.harvard.edu/confluence/display/BGC/MITgcm+ECCOv4+Odyssey+Guide
+#  But we have also consolidated and/or removed some redundant steps.
+#
+#  Now also copies the eccov4_input directory so that we can link files 
+#  to multiple run directories.  This should save a lot of disk space.
+#
+#  NOTE: In the file and directory lists, make sure to leave a blank space 
+#  at the end of each line.  This will separate files or directories in
+#  the bash "for" loop.
+#
+# !REVISION HISTORY:
+#  Use the "gitk" browser to view the Git version history.
+#EOP
+#------------------------------------------------------------------------------
+#BOC
+
+###############################################################################
+###                                                                         ###
+### Initialization                                                          ###
+###                                                                         ###
+###############################################################################
+
+# Pick the type of simulation based on user input
+if [[ "x$1" == xhg || "x$1" == xHg ]]; then
+   echo '#####################################################'
+   echo '### Creating run directory for "hg" simulation    ###'
+   echo '#####################################################'
+   SIM="hg"
+elif [[ "x$1" == xpfos || "x$1" == xPFOS ]]; then
+   echo '#####################################################'
+   echo '### Creating run directory for "pfos" simulation  ###'
+   echo '#####################################################'
+   SIM="pfos"
+elif [[ "x$1" == xpcb || "x$1" == xPCB ]]; then
+   echo '#####################################################'
+   echo '### Creating run directory for "pcb" simulation   ###'
+   echo '#####################################################'
+   SIM="pcb"
+else
+   echo "Run this script with one of the following:"
+   echo "./make_rundir hg"
+   echo "./make_rundir pfos"
+   echo "./make_rundir pcb"
+   exit 1
+fi
+
+# If the second argument is passed, then print the copy commands
+# but do not execute them.  This is useful for debugging.
+DRYRUN=0
+if [[ $# -eq 2 ]]; then
+   if [[ "x$2" == xD      || "x$2" == xd      || 
+         "x$2" == xdryrun || "x$2" == xDRYRUN    ]]; then
+       DRYRUN=1  
+       echo '### Using the DRYRUN option!  We are printing     ###'
+       echo '### the copy/link commands but not copying data!  ###'
+       echo '#####################################################'
+   fi
+fi
+
+# Save this directory name for future reference below
+START_DIR=$PWD
+
+# Specify remote directory paths from which we will copy data
+LAB=/n/sunderland_lab/Lab
+MITGCM=${LAB}/MITgcm_code
+
+# Verification directory and subfolders
+VERIF_DIR=verification
+if [[ x$SIM == xpfos ]]; then
+   SIM_DIR=${VERIF_DIR}/pfos
+else
+   SIM_DIR=${VERIF_DIR}/global_${SIM}_llc90
+fi
+
+###############################################################################
+###                                                                         ###
+### Copy dependent package directories to verification/                     ###
+### These contain files that will be linked to the run directory            ###
+###                                                                         ###
+###############################################################################
+
+# List of directories
+LIST=""
+LIST+="darwin_input "
+LIST+="eccov4_input "
+LIST+="global_oce_cs32 "
+LIST+="global_oce_llc90 "
+LIST+="global_oce_input_fields "
+LIST+="global_darwin_llc90 "
+
+# Copy each directory, if it is not already there
+# Loop over directories
+for DIR in $LIST; 
+do
+
+   if [[ -d ${VERIF_DIR}/${DIR} ]]; then
+      echo "${VERIF_DIR}/${DIR} is already in place"
+   else
+      echo "Creating: ${VERIF_DIR}/${DIR}"
+      if [[ $DRYRUN -eq 1 ]]; then
+	 echo "DRYRUN: cp -rfL ${MITGCM}/${VERIF_DIR}/${DIR} ${VERIF_DIR}"
+      else
+	 cp -rfL ${MITGCM}/${VERIF_DIR}/${DIR} ${VERIF_DIR}
+      fi
+   fi
+
+done
+
+###############################################################################
+###                                                                         ###
+### Create blank subfolders in ${SIM_DIR}                                   ###
+###                                                                         ###
+###############################################################################
+
+# List of subfolders
+LIST=""
+LIST+="build "
+LIST+="run " 
+LIST+="run/control "
+LIST+="run/forcing "
+LIST+="run/diags "
+LIST+="run/tapes "
+LIST+="run/profiles "
+LIST+="run/input_darwin "
+
+# Create each subfolder listed above
+for DIR in $LIST; 
+do
+   echo "Creating: ${SIM_DIR}/${DIR}"
+   if [[ $DRYRUN -eq 1 ]]; then
+      echo "DRYRUN: mkdir -p ${SIM_DIR}/${DIR}"
+   else
+      mkdir -p ${SIM_DIR}/${DIR}
+   fi
+done
+
+###############################################################################
+###                                                                         ###
+### Copy subfolders of from the remote path ${MITGCM}/${SIM_DIR}            ###
+### to the local path ${SIM_DIR}                                            ###
+####                                                                        ###
+###############################################################################
+
+# List of subfolders
+LIST=""
+LIST+="code "
+LIST+="run/initial "
+LIST+="run/input_${SIM} "
+
+# Copy each subdirectory (but only if it exists in the remote location)
+for DIR in $LIST; 
+do
+   if [[ -d ${MITGCM}/${SIM_DIR}/${DIR} ]]; then 
+      echo "Creating: ${SIM_DIR}/${DIR}"
+      if [[ $DRYRUN -eq 1 ]]; then 
+         echo "DRYRUN: cp -rf ${MITGCM}/${SIM_DIR}/${DIR} ${SIM_DIR}/${DIR}"
+      else
+         cp -rf ${MITGCM}/${SIM_DIR}/${DIR} ${SIM_DIR}/${DIR}
+      fi
+   fi
+done
+
+###############################################################################
+###                                                                         ###
+### Copy namelist (data*) files and run scripts                             ###
+###                                                                         ###
+###   From: The remote run directory: ${MITGCM}/${SIM_DIR}/run              ###
+###   To:   The local run directory:  ${SIM_DIR}/run                        ###
+###                                                                         ###
+###############################################################################
+
+# List of files
+LIST=""
+LIST+="${MITGCM}/${SIM_DIR}/run/data* "
+LIST+="${MITGCM}/${SIM_DIR}/run/run.mitgcm* "
+LIST+="${MITGCM}/${SIM_DIR}/run/eedata* "
+
+# Change to the run directory
+if [[ $DRYRUN -eq 1 ]]; then
+   echo "DRYRUN: cd ${SIM_DIR}/run"
+else
+   cd ${SIM_DIR}/run
+fi
+
+# Copy files
+for FILE in ${LIST}; 
+do
+   echo "${FILE}"
+
+   if [[ -f ${FILE} ]]; then 
+      echo "Copying: ${FILE} -> ${SIM_DIR}/run"
+      if [[ $DRYRUN -eq 1 ]]; then
+         echo "DRYRUN: cp -f ${FILE} ."
+      else
+	 cp -f ${FILE} .
+      fi
+   fi
+done
+
+# Return to starting directory
+if [[ $DRYRUN -eq 1 ]]; then 
+   echo "$DRYRUN: cd ${START_DIR}"
+else
+   cd ${START_DIR}
+fi
+
+###############################################################################
+###                                                                         ###
+### LINKING FILES (Step 1)                                                  ###
+###                                                                         ###
+### Link files from ../../global_oce_cs32/        to ${SIM_DIR}/run         ###
+### Link files from ../../global_oce_input_fields to ${SIM_DIR}/run         ###
+###                                                                         ###
+###############################################################################
+
+# Echo info
+echo "%%%%% LINKING FILES (Step 1) %%%%%"
+
+# Change to the run directory
+if [[ $DRYRUN -eq 1 ]]; then
+   echo "DRYRUN: cd ${SIM_DIR}/run"
+else
+   cd ${SIM_DIR}/run
+fi
+
+# List of files
+LIST=""
+LIST+="../../global_oce_cs32/input_fields/CORE2* "
+LIST+="../../global_oce_input_fields/ecmwf/* "
+LIST+="../../global_oce_input_fields/ecco_v4/* "
+LIST+="../../global_oce_input_fields/llc90/* "
+LIST+="../../global_oce_input_fields/llc90_fields/* "
+
+# Link each file to the run directory
+# Loop over the list of folders
+for FILE in ${LIST}; 
+do 
+   if [[ -f ${FILE} ]]; then
+     echo "Linking: $FILE -> ${SIM_DIR}/run"
+     if [[ $DRYRUN -eq 1 ]]; then
+	echo "DRYRUN: ln -s ${FILE} ."
+     else
+	ln -s ${FILE} .
+     fi
+   fi
+done
+
+# Remove old executable, pickup, controls, and PTRACERS* files,
+# because not all of these have to be in the run directory.  
+# We'll link to some of these again in the subfolders of run/.
+if [[ $DRYRUN -eq 1 ]]; then
+   echo "DRYRUN: rm -f mitgcmuv* pickup*ta wt*ta xx*ta slurm*out PTRACERS*"
+else
+   rm -f mitgcmuv* pickup*ta wt*ta xx*ta slurm*out PTRACERS*
+fi
+
+# Return to starting directory
+if [[ $DRYRUN -eq 1 ]]; then 
+   echo "$DRYRUN: cd ${START_DIR}"
+else
+   cd ${START_DIR}
+fi
+
+###############################################################################
+###                                                                         ###
+### LINKING FILES (Step 2)                                                  ###
+###                                                                         ###
+### Link files from ../../eccov4_input/ to ${SIM_DIR}/run/control           ###
+###                                                                         ###
+###############################################################################
+
+# Echo info
+echo "%%%%% LINKING FILES (Step 2) %%%%%"
+
+# List of files
+LIST=""
+LIST+="../../../eccov4_input/controls/* "
+LIST+="../../../global_oce_input_fields/llc90/wt_*.data "
+
+# Change to the control folder
+if [[ $DRYRUN -eq 1 ]]; then
+   echo "DRYRUN: cd ${SIM_DIR}/run/control"
+else
+   cd ${SIM_DIR}/run/control
+fi
+
+# Link files
+for FILE in ${LIST}; 
+do
+   if [[ -f $FILE ]]; then
+     echo "Linking: ${FILE} -> ${SIM_DIR}/run/control"
+     if [[ $DRYRUN -eq 1 ]]; then
+        echo "DRYRUN: ln -s $FILE ."
+     else
+	ln -s $FILE .
+     fi
+   fi
+done
+
+# Return to starting directory
+if [[ $DRYRUN -eq 1 ]]; then 
+   echo "$DRYRUN: cd ${START_DIR}"
+else
+   cd ${START_DIR}
+fi
+
+###############################################################################
+###                                                                         ###
+### LINKING FILES (Step 3)                                                  ###
+###                                                                         ###
+### Link files from ../../eccov4_input/MITprof to ${SIM_DIR}/run/profiles   ###
+###                                                                         ###
+###############################################################################
+
+# Echo info
+echo "%%%%% LINKING FILES (Step 3) %%%%%"
+
+# List of files
+LIST=""
+LIST+="../../../eccov4_input/MITprof/* "
+
+# Change to the run/profiles directory
+if [[ $DRYRUN -eq 1 ]]; then
+   echo "$DRYRUN: cd ${SIM_DIR}/run/profiles"
+else
+   cd ${SIM_DIR}/run/profiles
+fi
+
+for FILE in ${LIST};
+do
+   if [[ -f $FILE ]]; then
+      echo "Linking: ${FILE} -> ${SIM_DIR}/run/profiles"
+      if [[ $DRYRUN -eq 1 ]]; then
+         echo "DRYRUN: ln -s $FILE ."
+      else
+         ln -s $FILE .
+      fi
+   fi
+done
+
+# Return to starting directory
+if [[ $DRYRUN -eq 1 ]]; then 
+   echo "$DRYRUN: cd ${START_DIR}"
+else
+   cd ${START_DIR}
+fi
+
+###############################################################################
+###                                                                         ###
+### LINKING FILES (Step 4)                                                  ###
+###                                                                         ###
+### Link files from ../../eccov4_input/pickups to ${SIM_DIR}/run            ###
+###                                                                         ###
+###############################################################################
+
+# Echo info
+echo "%%%%% LINKING FILES (Step 4) %%%%%"
+
+# List of files
+LIST=""
+LIST+="../../eccov4_input/pickups/* "
+
+# Change to the run directory
+if [[ $DRYRUN -eq 1 ]]; then
+   echo "DRYRUN: cd ${SIM_DIR}/run"
+else
+   cd ${SIM_DIR}/run
+fi
+
+for FILE in ${LIST};
+do
+   if [[ -f $FILE ]]; then
+      echo "Linking:: ${FILE} -> ${SIM_DIR}/run/"
+      if [[ $DRYRUN -eq 1 ]]; then
+         echo "DRYRUN: ln -s $FILE ."
+      else
+	 ln -s $FILE .
+      fi
+   fi
+done
+
+# Return to starting directory
+if [[ $DRYRUN -eq 1 ]]; then 
+   echo "$DRYRUN: cd ${START_DIR}"
+else
+   cd ${START_DIR}
+fi
+
+###############################################################################
+###                                                                         ###
+### LINKING FILES (Step 5)                                                  ###
+###                                                                         ###
+### Link ../../.../eccov4_input/era-interim/*                               ###
+###      to ${SIM_DIR}/run/forcing                                          ###
+###                                                                         ###
+### Link ../../global_oce_input_fields/llc90_runoff/runoff-2d*,bin          ###
+###      to  ${SIM_DIR}/run/forcing                                         ###
+###                                                                         ###
+###############################################################################
+
+# Echo info
+echo "%%%%% LINKING FILES (Step 5) %%%%%"
+
+# List of files
+LIST=""
+LIST+="../../../eccov4_input/era-interim/* "
+LIST+="../../../global_oce_input_fields/llc90_runoff/runoff-2d-Fekete*bin " 
+
+# Change to the run/forcing directory
+if [[ $DRYRUN -eq 1 ]]; then
+   echo "DRYRUN: cd ${SIM_DIR}/run/forcing"
+else
+   cd ${SIM_DIR}/run/forcing
+fi
+
+for FILE in ${LIST}; 
+do
+   if [[ -f $FILE ]]; then
+      echo "Linking: ${FILE} -> ${SIM_DIR}/run/forcing"
+      if [[ $DRYRUN -eq 1 ]]; then
+	 echo "DRYRUN: ln -s $FILE ."
+      else
+         ln -s $FILE .
+      fi
+   fi
+done
+
+# Return to starting directory
+if [[ $DRYRUN -eq 1 ]]; then 
+   echo "$DRYRUN: cd ${START_DIR}"
+else
+   cd ${START_DIR}
+fi
+
+###############################################################################
+###                                                                         ###
+### LINKING FILES (Step 6)                                                  ###
+###                                                                         ###
+### Link files ../../../darwin_input/*                                      ###
+###      to    ${SIM_DIR}/run/input_darwin                                  ###
+###                                                                         ###
+###############################################################################
+
+# Echo info
+echo "%%%%% LINKING FILES (Step 6) %%%%%"
+
+# List of files
+LIST=""
+LIST+="../../../darwin_input/* "
+
+# Change to the run/input_darwin directory
+if [[ $DRYRUN -eq 1 ]]; then
+   echo "DRYRUN: cd ${SIM_DIR}/run/input_darwin"
+else
+   cd ${SIM_DIR}/run/input_darwin
+fi
+
+for FILE in ${LIST}; 
+do
+   if [[ -f $FILE ]]; then
+      echo "Linking: ${FILE} -> ${SIM_DIR}/run/input_darwin"
+      if [[ $DRYRUN -eq 1 ]]; then
+         echo "DRYRUN: ln -s $FILE ."
+      else
+         ln -s $FILE .
+      fi
+   fi
+done
+
+# Return to starting directory
+if [[ $DRYRUN -eq 1 ]]; then 
+   echo "$DRYRUN: cd ${START_DIR}"
+else
+   cd ${START_DIR}
+fi
+
+###############################################################################
+###                                                                         ###
+### Quit                                                                    ###
+###                                                                         ###
+###############################################################################
+
+echo
+echo "Now build the MITgcm executable and copy it to ${SIM_DIR}/build,"
+echo "then copy the executable (mitgcmuv) to ${SIM_DIR}/run,"
+echo "and submit a job to the SLURM scheduler"
+
+exit 0

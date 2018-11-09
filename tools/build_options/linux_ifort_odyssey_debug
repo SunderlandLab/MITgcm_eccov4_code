@@ -1,0 +1,109 @@
+#!/bin/bash
+#------------------------------------------------------------------------------
+#              Harvard Biogeochemistry of Global Pollutants Group             !
+#------------------------------------------------------------------------------
+#BOP
+#
+# !IROUTINE: linux_ifort_odyssey_debug
+#
+# !DESCRIPTION: Build options for Intel Fortran Compiler, as tested on 
+#  the Harvard Odyssey supercomputer.  Contains debug commands that
+#  you can edit.
+#\\
+#\\
+# !REMARKS:
+#  Tested with the following modules on Odyssey:
+#  intel/13.0.079-fasrc01 openmpi/1.8.1-fasrc05 netcdf/4.1.3-fasrc06
+#
+#  Note that We need to use netCDF-4.1.3, which keeps both the C and Fortran
+#  libraries in the same folder.  MITgcm cannot handle netCDF-4.2, which
+#  separates the C and Fortran libraries into different folders.
+#
+#  This script is passed to genmake2.  We typically use an alias that
+#  is defined in the ~/.bashrc_mitgcm file:
+# 
+#    alias premake='../../../tools/genmake2 -mpi -mods=../code \
+#      -optfile=../../../tools/build_options/linux_amd64_ifort_odyssey'
+#
+#  PREVIOUS REMARKS:
+#   Composed and tested by ce107 on ross/weddell (Opteron system)
+#   Should work fine on EM64T and other AMD64 compatible Intel systems
+#   a) Processor specific flags:
+#      1) for more speed on Core2 processors replace -xW with -xT
+#   b) For more speed, provided your data size doesn't exceed 2GB you can
+#      remove -fPIC which carries a performance penalty of 2-6%.
+#   c) Provided that the libraries you link to are compiled with -fPIC this
+#      optfile should work.
+#   d) You can replace -fPIC with -mcmodel=medium which may perform faster
+#      than -fPIC and still support data sizes over 2GB per process but all
+#      the libraries you link to must be compiled with -fPIC or -mcmodel=medium
+#   e) Changed from -O3 to -O2 to avoid buggy Intel v.10 compilers. Speed
+#      impact appears to be minimal.
+#
+# !REVISION HISTORY:
+#  26 Jan 2016 - R. Yantosca - Initial version, based on linux_ifort_odyssey
+#EOP
+#------------------------------------------------------------------------------
+
+# Set compiler variables (depending on whether we are using MPI or not)
+if [[ "x$MPI" = xtrue ]]; then
+  CC=mpicc
+  FC=mpif77
+  F90C=mpif90
+else
+  CC=icc
+  FC=ifort
+  F90C=ifort
+fi
+
+DEFINES='-DWORDLENGTH=4'
+CPP='cpp -traditional -P'
+F90FIXEDFORMAT='-fixed -Tf'
+EXTENDED_SRC_FLAG='-132'
+GET_FC_VERSION="--version"
+OMPFLAG='-openmp'
+
+NOOPTFLAGS='-O0 -g'
+NOOPTFILES=''
+
+#----------------------------------------------------------------------------
+# Compiler flag notes (Bob Yantosca, 22 Feb 2016)
+#
+# -auto                : Put all local variables on the stack memory
+# -convert big_endian  : Save binary output to IEEE big-endian format
+# -assume byterecl     : Assume that the Fortran OPEN statement record
+#                         length specifier (RECL) are in bytes for binary
+#                         unformatted files.
+# -noalign             : Do not align common blocks etc on 64-bit boundaries
+# -mcmodel=medium      : Use large memory model (for code > 2GB of data)
+# -fp-model source     : Use strictest floating-point math
+# -O2                  : Use optimization level 2 (default)
+#----------------------------------------------------------------------------
+FFLAGS="$FFLAGS -W0 -auto -convert big_endian -assume byterecl -noalign"
+FFLAGS="$FFLAGS -mcmodel=medium"
+FFLAGS="$FFLAGS -fp-model source"
+FFLAGS="$FFLAGS -traceback"
+FFLAGS="$FFLAGS -check bounds" 
+
+# %%%%% OPTIMIZATION FOR NORMAL SIMULATIONS (uncomment this line) %%%%%
+FOPTIM='-O2'
+
+# %%%%% OPTIMIZATION FOR DEBUG SIMULATIONS (uncomment this line) %%%%%
+#FOPTIM='-g -O0 -fpe0 -ftrapuv -check all'
+
+# Further flags
+F90FLAGS=$FFLAGS
+F90OPTIM=$FOPTIM
+CFLAGS='-O0 -ip -fPIC'
+
+# Pick the proper netCDF include and library paths
+INCLUDEDIRS="${NETCDF_INCLUDE}"
+INCLUDES="-I${NETCDF_INCLUDE}"
+LIBS="-L${NETCDF_LIB}"
+
+# Pick the proper MPI include paths
+INCLUDEDIRS="$INCLUDEDIRS ${MPI_INCLUDE}"
+INCLUDES="$INCLUDES -I${MPI_INCLUDE}"
+MPIINCLUDEDIR="${MPI_INCLUDE}"
+
+#EOC

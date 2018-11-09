@@ -1,0 +1,112 @@
+!------------------------------------------------------------------------------
+!              Harvard Biogeochemistry of Global Pollutants Group             !
+!------------------------------------------------------------------------------
+!BOP
+!
+! !ROUTINE: pfc_arcticboundary.F
+!
+! !DESCRIPTION:To calculate the partition of PFC species in the ocean.
+! Local equlibrium between the anionic, neutral, and particulate species are 
+! assumed to be reached instantaneously
+!\\
+!\\
+! !INTERFACE:
+!
+#include "GCHEM_OPTIONS.h"
+#include "PFC_OPTIONS.h"
+
+      SUBROUTINE PFC_ARCTICBOUNDARY( Ptr,
+     &                         bi,bj,imin,imax,jmin,jmax,
+     &                         myIter,myTime,myThid)
+!
+! !USES:
+!
+      IMPLICIT NONE
+      
+      ! Global variables
+#include "SIZE.h"
+#include "EEPARAMS.h"
+#include "PARAMS.h"
+#include "GRID.h"
+#include "DYNVARS.h"
+#include "PTRACERS_SIZE.h"
+#include "PTRACERS_PARAMS.h"
+#include "PFC_SIZE.h"
+#include "PFC.h"
+!
+! !INPUT PARAMETERS: 
+!
+      INTEGER myIter
+      _RL myTime
+      INTEGER myThid
+      INTEGER i,j,k,bi, bj, imin, imax, jmin, jmax
+!
+! !INPUT/OUTPUT PARAMETERS: 
+!
+      _RL  Ptr(1-OLx:sNx+OLx,1-OLy:sNy+OLy,Nr,nSx,nSy,PTRACERS_num)
+!
+! !REMARKS:
+! based on the code of Hg species in the ocean by yanxu
+!
+! !REVISION HISTORY:
+!  29 Feb 2016 - R. Yantosca - Added ProTex headers
+!EOP
+!------------------------------------------------------------------------------
+!BOC
+!
+! !LOCAL VARIABLES:
+!
+      _RL  pfci_arcbdrold,pfcn_arcbdrold,pfcp_arcbdrold
+      _RL  pfci_arcbdrnew,pfcn_arcbdrnew,pfcp_arcbdrnew
+
+#ifdef ALLOW_PTRACERS
+#ifdef ALLOW_PFC
+
+      DO j=jMin,jMax
+       DO i=iMin,iMax
+        DO k=1,Nr
+         IF (HFacC(i,j,k,bi,bj).gt.0. _d 0) THEN
+
+            IF
+     & (
+     &  (yC(i,j,bi,bj).GE.78.5d0 .AND. (xC(i,j,bi,bj).LE.11.5d0 .OR.
+     &                               xC(i,j,bi,bj).GE.341.5d0)
+     &  ) .OR.
+     &  (yC(i,j,bi,bj).GE.74.5d0 .AND. (xC(i,j,bi,bj).LE.56.5d0 .AND.
+     &                               xC(i,j,bi,bj).GE.16.5d0)
+     &  ) .OR.
+     &  (yC(i,j,bi,bj).GE.68.5d0 .AND. (xC(i,j,bi,bj).GE.279.5d0 .AND.
+     &                               xC(i,j,bi,bj).LE.280.5d0)
+     &  )
+     & ) THEN               
+                
+                               
+C            write(*,*) 'xz checking j,i,k in PFC_ARCTICBOUNDARY',j,i,k
+    
+
+            pfci_arcbdrold = max(Ptr(i,j,k,bi,bj,ipfci),0d0)
+            pfcn_arcbdrold = max(Ptr(i,j,k,bi,bj,ipfcn),0d0)
+            pfcp_arcbdrold = max(Ptr(i,j,k,bi,bj,ipfcp),0d0)
+
+          
+             pfci_arcbdrnew = 0.d0
+             pfcn_arcbdrnew = 0.d0
+             pfcp_arcbdrnew = 0.d0
+             Ptr(i,j,k,bi,bj,ipfci) = pfci_arcbdrnew
+             Ptr(i,j,k,bi,bj,ipfcn) = pfcn_arcbdrnew
+             Ptr(i,j,k,bi,bj,ipfcp) = pfcp_arcbdrnew
+             
+           ENDIF
+         
+         ENDIF !(HFacC(i,j,k,bi,bj).gt.0. _d 0) 
+        ENDDO   !k
+       ENDDO    !i
+      ENDDO     !j
+
+#endif /* ALLOW_PFC      */
+#endif /* ALLOW_PTRACERS */
+C     write(*,*) 'xz checking call PFC_PARTITION end'
+
+       RETURN
+       END
+!EOC

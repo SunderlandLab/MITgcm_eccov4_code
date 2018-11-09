@@ -1,0 +1,90 @@
+#!/bin/bash
+
+#EOC
+#------------------------------------------------------------------------------
+#              Harvard Biogeochemistry of Global Pollutants Group             !
+#------------------------------------------------------------------------------
+#BOP
+#
+# !IROUTINE: setcpus
+#
+# !DESCRIPTION: Convenience script to set up the MITgcm for either 13 or
+#  96 CPUs.  Copies the appropriate files with parameter settings into 
+#  place (e.g. cp SIZE.h.13np SIZE.h)
+#\\
+#\\
+# !CALLING SEQUENCE:
+#  ./setcpus 13 hg    # To run MITgcm with 13 CPUs, Hg simulation
+#  ./setcpus 96 hg    # To run MITgcm with 96 CPUs, Hg simulation
+#  ./setcpus 13 pfos  # To run MITgcm with 13 CPUs, PFOS simulation
+#  ./setcpus 96 pfos  # To run MITgcm with 96 CPUs, PFOS simulation
+#  ./setcpus 13 pcb   # To run MITgcm with 13 CPUs, PCB simulation
+#  ./setcpus 96 pcb   # To run MITgcm with 96 CPUs, PCB simulation
+#
+# !REMARKS:
+#  Based on the instructions on the Harvard BCG wiki page:
+#  https://wiki.harvard.edu/confluence/display/BGC/MITgcm+ECCOv4+Odyssey+Guide
+#
+#  Further hand-editing of files in the various subfolders may still
+#  be necessary.  Consult the Harvard BGC wiki for more information.
+#
+# !REVISION HISTORY:
+#  Use the "gitk" browser to view the Git version history.
+#EOP
+#------------------------------------------------------------------------------
+#BOC
+
+# Use 96 CPUs by default, or 13 if requested
+if [[ x$1 == x13 ]]; then
+   NCPUS=13
+else
+   NCPUS=96
+fi
+
+# Pick the type of simulation based on user input
+if [[ x$2 == xhg  || x$2 == xHg ]]; then
+   SIM="hg"
+elif [[ x$2 == xpfos || x$2 == xPFOS ]]; then
+   SIM="pfos"
+elif [[ x$2 == xpcb || x$2 == xPCB ]]; then
+  SIM="pcb"
+else
+   echo "Run this script with one of the following:"
+   echo "./setcpus 13 hg"
+   echo "./setcpus 96 hg"
+   echo "./setcpus 13 pfos"
+   echo "./setcpus 96 pfos"
+   echo "./setcpus 13 pcb"
+   echo "./setcpus 96 pcb"
+   exit 1
+fi
+
+# Set code & run directories
+if [[ x$SIM == xpfos ]]; then
+  CODE_DIR=verification/pfos/code
+  RUN_DIR=verification/pfos/run
+elif [[ x$SIM == xpcb ]]; then
+  CODE_DIR=verification/pcb/code
+  RUN_DIR=verification/pcb/run
+else
+  CODE_DIR=verification/global_hg_llc90/code
+  RUN_DIR=verification/global_hg_llc90/run
+fi
+
+# Echo info
+echo "Copying files to set up a MITgcm ${SIM} run on ${NCPUS} CPUs ..."
+
+# Copy the SIZE.h file
+if [[ -f "$CODE_DIR/SIZE.h.${NCPUS}np" ]]; then
+   cp -fv $CODE_DIR/SIZE.h.${NCPUS}np $CODE_DIR/SIZE.h
+fi
+
+# Copy the data.exch2 file
+if [[ -f "$RUN_DIR/data.exch2.${NCPUS}np" ]]; then
+   cp -fv $RUN_DIR/data.exch2.${NCPUS}np $RUN_DIR/data.exch2
+fi
+
+# Quit
+exit 0
+
+#EOC
